@@ -61,7 +61,7 @@ def fetch_tmdb_data(movie_title):
     params = {
         "api_key": config.TMDB_API_KEY,
         "query": movie_title,
-        "language": "en-US", # change this if needed
+        "language": "en-US",
     }
     try:
         response = requests.get(base_url, params=params)
@@ -74,6 +74,22 @@ def fetch_tmdb_data(movie_title):
     except requests.exceptions.RequestException as e:
         logging.error(f"Error fetching from TMDB: {e}")
         return None
+
+def fetch_tmdb_data_by_id(movie_id):
+        """Fetches movie data from TMDB by id"""
+        base_url = f"https://api.themoviedb.org/3/movie/{movie_id}"
+        params = {
+            "api_key": config.TMDB_API_KEY,
+            "language": "en-US",
+        }
+        try:
+            response = requests.get(base_url, params=params)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+          logging.error(f"Error fetching from TMDB: {e}")
+          return None
+
 
 # --- Command Handlers ---
 @bot.message_handler(commands=['start', 'help'])
@@ -111,9 +127,9 @@ def request_handler(message):
         keyboard.add(types.InlineKeyboardButton(f"{movie['title']} ({movie['release_date'][:4]})", callback_data=f"select_movie_{movie['id']}_{movie_title}"))
       bot.reply_to(message, f"Multiple movies found for '{movie_title}'. Please select one:", reply_markup=keyboard)
     else:
-        keyboard = types.InlineKeyboardMarkup()
-        keyboard.add(types.InlineKeyboardButton("Confirm Request", callback_data=f'confirm_request_{movie_title}_None'))
-        bot.reply_to(message,f"Request '{movie_title}'. Are you sure?", reply_markup=keyboard)
+      keyboard = types.InlineKeyboardMarkup()
+      keyboard.add(types.InlineKeyboardButton("Confirm Request", callback_data=f'confirm_request_{movie_title}_None'))
+      bot.reply_to(message,f"Request '{movie_title}'. Are you sure?", reply_markup=keyboard)
 
 
 @bot.message_handler(commands=['status'])
@@ -163,9 +179,9 @@ def callback_handler(call):
               keyboard.add(types.InlineKeyboardButton("Mark Complete", callback_data=f'mark_complete_{req["movie_title"]}'))
               tmdb_details_text = ""
               if req.get("tmdb_id") != "None":
-                  tmdb_details = fetch_tmdb_data(req.get("movie_title"))
-                  if tmdb_details:
-                       tmdb_details_text = f"\n\nTitle: {tmdb_details['title']}\nRelease Date:{tmdb_details['release_date']}"
+                    tmdb_details = fetch_tmdb_data_by_id(req.get("tmdb_id"))
+                    if tmdb_details:
+                         tmdb_details_text = f"\n\nTitle: {tmdb_details['title']}\nRelease Date:{tmdb_details['release_date']}\nPoster:{f'https://image.tmdb.org/t/p/w500{tmdb_details["poster_path"]}' if tmdb_details.get("poster_path") else 'No Poster'}"
 
               bot.edit_message_text(text=f"Movie:{req['movie_title']}\nUser: {req['telegram_user_id']}\nDate: {req['request_timestamp']}\nStatus: {'Available' if req['available'] else 'Pending'}{tmdb_details_text}",
                                    chat_id=call.message.chat.id,
