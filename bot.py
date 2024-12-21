@@ -29,15 +29,15 @@ def get_request(user_id, movie_title):
     return db.requests.find_one({"telegram_user_id": user_id, "movie_title": movie_title})
 
 def create_request(user_id, movie_title, timestamp, tmdb_id):
-        return db.requests.insert_one({
-            "telegram_user_id": user_id,
-            "movie_title": movie_title,
-            "request_timestamp": timestamp,
-            "status": "pending",
-            "tmdb_id": tmdb_id,
-            "link": None,
-            "available": False,
-        })
+    return db.requests.insert_one({
+        "telegram_user_id": user_id,
+        "movie_title": movie_title,
+        "request_timestamp": timestamp,
+        "status": "pending",
+        "tmdb_id": tmdb_id,
+        "link": None,
+        "available": False,
+    })
 
 def update_request_link(movie_title, link):
     return db.requests.update_one({"movie_title": movie_title}, {"$set": {"link": link, "status": "completed", "available": True}})
@@ -61,7 +61,7 @@ def create_retry_session():
     retry_strategy = Retry(
             total=3, # Number of retries
             status_forcelist=[429, 500, 502, 503, 504], # Response statuses for which a retry should occur
-            method_whitelist=["GET"], # Method for which retry should occur
+            allowed_methods=["GET"], # Method for which retry should occur
             backoff_factor = 1 # Factor to determine wait time
     )
     adapter = HTTPAdapter(max_retries=retry_strategy)
@@ -88,8 +88,8 @@ def fetch_tmdb_data(movie_title):
         else:
             return None
     except requests.exceptions.RequestException as e:
-         logging.error(f"Error fetching from TMDB: {e}")
-         return None
+        logging.error(f"Error fetching from TMDB: {e}")
+        return None
 
 def fetch_tmdb_data_by_id(movie_id):
         """Fetches movie data from TMDB by id"""
@@ -103,18 +103,16 @@ def fetch_tmdb_data_by_id(movie_id):
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-           logging.error(f"Error fetching from TMDB: {e}")
-           return None
+          logging.error(f"Error fetching from TMDB: {e}")
+          return None
 
 def start_polling():
     while True:
             try:
                 bot.polling(non_stop=True)
             except requests.exceptions.ConnectionError as e:
-                 logging.error(f"Connection Error: {e}, will retry in 10 seconds.")
-                 time.sleep(10)
-
-
+                logging.error(f"Connection Error: {e}, will retry in 10 seconds.")
+                time.sleep(10)
 
 # --- Command Handlers ---
 @bot.message_handler(commands=['start', 'help'])
@@ -310,9 +308,9 @@ def handle_filter(message, filter_type):
 
 # --- Main ---
 if __name__ == '__main__':
-  def start_flask_app():
-      app.run(host='0.0.0.0', port=8080)
+    def start_flask_app():
+        app.run(host='0.0.0.0', port=8080)
 
-  flask_thread = threading.Thread(target=start_flask_app)
-  flask_thread.start()
-  start_polling()
+    flask_thread = threading.Thread(target=start_flask_app)
+    flask_thread.start()
+    start_polling()
