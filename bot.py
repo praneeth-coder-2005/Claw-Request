@@ -8,6 +8,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import time
+from flask import Flask, Response, request
+import threading
 
 # --- Logging Setup ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -51,6 +53,14 @@ def filter_requests(filter):
 
 # --- Telebot Setup ---
 bot = telebot.TeleBot(config.TELEGRAM_BOT_TOKEN)
+
+# --- Flask Setup ---
+app = Flask(__name__)
+
+@app.route('/health')
+def health_check():
+    return Response(status=200)
+
 
 # --- TMDB API ---
 def create_retry_session():
@@ -131,7 +141,6 @@ def request_handler(message):
     except:
       bot.reply_to(message,"Please provide a movie title")
       return
-
     if not movie_title.strip():
         bot.reply_to(message, "Please provide a movie title after the /request command. For example: `/request Avengers Endgame`")
         return
@@ -290,7 +299,6 @@ def callback_handler(call):
       admin_handler(call.message)
   elif data.startswith("back_to_pending"):
     show_pending_list(call)
-
 @bot.callback_query_handler(func=lambda call: call.data.startswith("mylist_details"))
 def handle_mylist_details(call):
     logging.info(f"handle_mylist_details called with {call.data}")
@@ -389,4 +397,9 @@ def show_request_details(call, movie_title):
 
 # --- Main ---
 if __name__ == '__main__':
-    start_polling()
+        def start_flask_app():
+            app.run(host='0.0.0.0', port=8080)
+
+        flask_thread = threading.Thread(target=start_flask_app)
+        flask_thread.start()
+        start_polling()
