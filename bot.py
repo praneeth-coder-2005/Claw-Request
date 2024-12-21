@@ -3,14 +3,17 @@ from telebot import types
 import pymongo
 import datetime
 import logging
-import config  # Import credentials from config.py
+import config
+from flask import Flask, Response
+import threading
+
 
 # --- Logging Setup ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 # --- MongoDB Setup ---
 client = pymongo.MongoClient(config.MONGODB_URI)
-db = client[config.MONGODB_DATABASE_NAME]  # Changed to use db name directly
+db = client[config.MONGODB_DATABASE_NAME]
 
 # --- Utility Functions ---
 def is_admin(user_id):
@@ -38,9 +41,15 @@ def update_request_link(movie_title, link):
 def filter_requests(filter):
     return db.requests.find(filter).sort("request_timestamp", pymongo.DESCENDING)
 
-
 # --- Telebot Setup ---
 bot = telebot.TeleBot(config.TELEGRAM_BOT_TOKEN)
+
+# --- Flask Setup ---
+app = Flask(__name__)
+
+@app.route('/health')
+def health_check():
+    return Response(status=200)
 
 # --- Command Handlers ---
 @bot.message_handler(commands=['start', 'help'])
@@ -67,7 +76,6 @@ def request_handler(message):
     keyboard.add(types.InlineKeyboardButton("Confirm Request", callback_data=f'confirm_request_{movie_title}'))
     bot.reply_to(message,f"Request '{movie_title}'. Are you sure?", reply_markup=keyboard)
 
-
 @bot.message_handler(commands=['status'])
 def status_handler(message):
     user_id = message.from_user.id
@@ -87,7 +95,6 @@ def status_handler(message):
         keyboard = types.InlineKeyboardMarkup()
         keyboard.add(types.InlineKeyboardButton("View Link", url=request_data.get("link")))
         bot.reply_to(message, f"Great news! '{movie_title}' is available here: {request_data.get('link')}", reply_markup=keyboard)
-
 
 @bot.message_handler(commands=['admin'])
 def admin_handler(message):
@@ -182,7 +189,6 @@ def callback_handler(call):
                           message_id=call.message.message_id)
     bot.answer_callback_query(call.id)
 
-
 def handle_link(message, movie_title):
     update_request_link(movie_title, message.text)
     bot.reply_to(message, f"Link added for '{movie_title}'.")
@@ -204,4 +210,9 @@ def handle_filter(message, filter_type):
 
 # --- Main ---
 if __name__ == '__main__':
+    def start_flask_app():
+        app.run(host='0.0.0.0', port=8080)
+
+    flask_thread = threading.Thread(target=start_flask_app)
+    flask_thread.start()
     bot.polling(non_stop=True)
