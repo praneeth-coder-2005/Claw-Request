@@ -4,8 +4,6 @@ import pymongo
 import datetime
 import logging
 import config
-from flask import Flask, Response, request
-import threading
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -53,19 +51,6 @@ def filter_requests(filter):
 
 # --- Telebot Setup ---
 bot = telebot.TeleBot(config.TELEGRAM_BOT_TOKEN)
-bot.remove_webhook()
-# --- Flask Setup ---
-app = Flask(__name__)
-
-@app.route('/health')
-def health_check():
-    return Response(status=200)
-@app.route(f"/{config.TELEGRAM_BOT_TOKEN}",methods=["POST"])
-def webhook():
-    json_str = request.get_data().decode("utf-8")
-    update = telebot.types.Update.de_json(json_str)
-    bot.process_new_updates([update])
-    return "",200
 
 # --- TMDB API ---
 def create_retry_session():
@@ -117,6 +102,13 @@ def fetch_tmdb_data_by_id(movie_id):
           logging.error(f"Error fetching from TMDB: {e}")
           return None
 
+def start_polling():
+    while True:
+            try:
+                bot.polling(non_stop=True)
+            except requests.exceptions.ConnectionError as e:
+                logging.error(f"Connection Error: {e}, will retry in 10 seconds.")
+                time.sleep(10)
 
 # --- Command Handlers ---
 @bot.message_handler(commands=['start', 'help'])
@@ -354,9 +346,4 @@ def show_request_details(call, movie_title):
 
 # --- Main ---
 if __name__ == '__main__':
-    def start_flask_app():
-        bot.set_webhook(f"https://{config.KOYEB_APP_URL}/{config.TELEGRAM_BOT_TOKEN}")
-        app.run(host='0.0.0.0', port=8080)
-
-    flask_thread = threading.Thread(target=start_flask_app)
-    flask_thread.start()
+    start_polling()
