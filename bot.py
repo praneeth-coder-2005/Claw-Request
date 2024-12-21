@@ -27,19 +27,18 @@ def get_request(user_id, movie_title):
     return db.requests.find_one({"telegram_user_id": user_id, "movie_title": movie_title})
 
 def create_request(user_id, movie_title, timestamp, tmdb_id):
-    return db.requests.insert_one({
-        "telegram_user_id": user_id,
-        "movie_title": movie_title,
-        "request_timestamp": timestamp,
-        "status": "pending",
-        "tmdb_id": tmdb_id,
-        "link": None,
-        "available": False,
-    })
+        return db.requests.insert_one({
+            "telegram_user_id": user_id,
+            "movie_title": movie_title,
+            "request_timestamp": timestamp,
+            "status": "pending",
+            "tmdb_id": tmdb_id,
+            "link": None,
+            "available": False,
+        })
 
 def update_request_link(movie_title, link):
     return db.requests.update_one({"movie_title": movie_title}, {"$set": {"link": link, "status": "completed", "available": True}})
-
 
 def filter_requests(filter):
     return db.requests.find(filter).sort("request_timestamp", pymongo.DESCENDING)
@@ -178,13 +177,13 @@ def callback_handler(call):
               keyboard = types.InlineKeyboardMarkup()
               keyboard.add(types.InlineKeyboardButton("Mark Complete", callback_data=f'mark_complete_{req["movie_title"]}'))
               tmdb_details_text = ""
-              if req.get("tmdb_id") != "None":
+              if req.get("tmdb_id") != "None" and req.get("tmdb_id") != None:
                     tmdb_details = fetch_tmdb_data_by_id(req.get("tmdb_id"))
                     if tmdb_details:
                          poster_url = f'https://image.tmdb.org/t/p/w500{tmdb_details["poster_path"]}' if tmdb_details.get("poster_path") else 'No Poster'
                          tmdb_details_text = f"\n\nTitle: {tmdb_details['title']}\nRelease Date:{tmdb_details['release_date']}\nPoster: {poster_url}"
 
-              bot.edit_message_text(text=f"Movie:{req['movie_title']}\nUser: {req['telegram_user_id']}\nDate: {req['request_timestamp']}\nStatus: {'Available' if req['available'] else 'Pending'}{tmdb_details_text}",
+              bot.edit_message_text(text=f"Movie:{req['movie_title']}\nUser: {req['telegram_user_id']}\nDate: {req['request_timestamp']}\nStatus: {'Available' if req.get('available') else 'Pending'}{tmdb_details_text}",
                                    chat_id=call.message.chat.id,
                                    message_id=call.message.message_id,
                                    reply_markup=keyboard)
