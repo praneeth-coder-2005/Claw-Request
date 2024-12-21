@@ -283,20 +283,27 @@ def callback_handler(call):
   elif data.startswith("view_details"):
     movie_title = data.split("_")[2]
     show_request_details(call, movie_title)
+  elif data == "back_to_admin_menu":
+      admin_handler(call.message)
   elif data.startswith("back_to_pending"):
     show_pending_list(call)
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith("mylist_details"))
 def handle_mylist_details(call):
     logging.info(f"handle_mylist_details called with {call.data}")
-    movie_title = call.data.split("_")[2]
-    request = get_request(call.from_user.id,movie_title)
-    if request:
-        status_text = "Pending" if request.get("status") == "pending" else ("Available: " + request.get("link") if request.get("status") == "completed" else "Rejected")
-        bot.edit_message_text(text =f"Movie: {request.get('movie_title')}\nStatus: {status_text}",
-                            chat_id = call.message.chat.id,
-                            message_id = call.message.message_id)
-    else:
-        bot.answer_callback_query(call.id,text = "Movie not found")
+    try:
+        movie_title = call.data.split("_")[2]
+        request = get_request(call.from_user.id,movie_title)
+        if request:
+            status_text = "Pending" if request.get("status") == "pending" else ("Available: " + request.get("link") if request.get("status") == "completed" else "Rejected")
+            bot.edit_message_text(text =f"Movie: {request.get('movie_title')}\nStatus: {status_text}",
+                                chat_id = call.message.chat.id,
+                                message_id = call.message.message_id)
+        else:
+            bot.answer_callback_query(call.id,text = "Movie not found")
+    except Exception as e:
+        logging.error(f"Error in handle_mylist_details {e}")
+        bot.answer_callback_query(call.id, text="An error occurred.")
 
 def handle_link(message, movie_title,chat_id):
     update_request_link(movie_title, message.text)
