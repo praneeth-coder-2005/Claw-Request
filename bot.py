@@ -163,9 +163,10 @@ def mylist_handler(message):
       bot.reply_to(message, "You haven't requested any movies yet.")
       return
 
+    keyboard = types.InlineKeyboardMarkup()
     for req in requests:
-      status_text = "Pending" if req.get("status") == "pending" else ("Available: " + req.get("link") if req.get("status") == "completed" else "Rejected")
-      bot.send_message(chat_id=message.chat.id, text=f"Movie: {req.get('movie_title')}\nStatus: {status_text}")
+        keyboard.add(types.InlineKeyboardButton(text=req.get("movie_title"), callback_data=f"mylist_details_{req.get('movie_title')}"))
+    bot.reply_to(message, "Your Movie List:", reply_markup=keyboard)
 
 @bot.message_handler(commands=['status'])
 def status_handler(message):
@@ -277,7 +278,15 @@ def callback_handler(call):
     show_request_details(call, movie_title)
   elif data.startswith("back_to_pending"):
     show_pending_list(call)
-
+@bot.callback_query_handler(func=lambda call: call.data.startswith("mylist_details"))
+def handle_mylist_details(call):
+    movie_title = call.data.split("_")[2]
+    request = get_request(call.from_user.id,movie_title)
+    if request:
+        status_text = "Pending" if request.get("status") == "pending" else ("Available: " + request.get("link") if request.get("status") == "completed" else "Rejected")
+        bot.edit_message_text(text =f"Movie: {request.get('movie_title')}\nStatus: {status_text}",
+                            chat_id = call.message.chat.id,
+                            message_id = call.message.message_id)
 
 def handle_link(message, movie_title,chat_id):
     update_request_link(movie_title, message.text)
@@ -314,10 +323,10 @@ def show_pending_list(call):
     if not requests:
         bot.answer_callback_query(call.id, text="No requests yet")
     else:
+        keyboard = types.InlineKeyboardMarkup()
         for req in requests:
-            keyboard = types.InlineKeyboardMarkup()
-            keyboard.add(types.InlineKeyboardButton("View Details", callback_data=f'view_details_{req["movie_title"]}'))
-            bot.edit_message_text(text=f"Movie:{req['movie_title']}\nUser: {req['telegram_user_id']}\nDate: {req['request_timestamp']}\nStatus: {'Available' if req.get('available') else 'Pending' if req.get('status') == 'pending' else 'Rejected'}",
+            keyboard.add(types.InlineKeyboardButton(text=req.get("movie_title"), callback_data=f'view_details_{req["movie_title"]}'))
+        bot.edit_message_text("Pending Requests:",
                                 chat_id=call.message.chat.id,
                                 message_id=call.message.message_id,
                                 reply_markup=keyboard)
