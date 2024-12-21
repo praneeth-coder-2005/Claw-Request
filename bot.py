@@ -153,7 +153,10 @@ def request_handler(message):
       keyboard.add(types.InlineKeyboardButton("Confirm Request", callback_data=f'confirm_request_{movie_title}_None'))
       bot.reply_to(message,f"No movies found with name '{movie_title}'\nRequest '{movie_title}'. Are you sure? If you provide wrong spelling I can't search", reply_markup=keyboard)
     for admin_id in config.ADMIN_USER_IDS:
-        bot.send_message(chat_id=admin_id, text=f"New movie request '{movie_title}' by user {message.from_user.first_name} with ID: {user_id}")
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard.add(types.InlineKeyboardButton(text="Add Link", callback_data=f'mark_complete_{movie_title}'))
+        bot.send_message(chat_id=admin_id, text=f"New movie request '{movie_title}' by user {message.from_user.first_name} with ID: {user_id}", reply_markup=keyboard)
+
 
 @bot.message_handler(commands=['mylist'])
 def mylist_handler(message):
@@ -207,6 +210,7 @@ def admin_handler(message):
 @bot.callback_query_handler(func=lambda call: True)
 def callback_handler(call):
   data = call.data
+  logging.info(f"Callback data: {data}")
 
   if data == "list_pending":
     show_pending_list(call)
@@ -283,6 +287,7 @@ def callback_handler(call):
     show_pending_list(call)
 @bot.callback_query_handler(func=lambda call: call.data.startswith("mylist_details"))
 def handle_mylist_details(call):
+    logging.info(f"handle_mylist_details called with {call.data}")
     movie_title = call.data.split("_")[2]
     request = get_request(call.from_user.id,movie_title)
     if request:
@@ -290,6 +295,8 @@ def handle_mylist_details(call):
         bot.edit_message_text(text =f"Movie: {request.get('movie_title')}\nStatus: {status_text}",
                             chat_id = call.message.chat.id,
                             message_id = call.message.message_id)
+    else:
+        bot.answer_callback_query(call.id,text = "Movie not found")
 
 def handle_link(message, movie_title,chat_id):
     update_request_link(movie_title, message.text)
@@ -343,6 +350,7 @@ def show_completed_list(call):
         keyboard = types.InlineKeyboardMarkup()
         for req in requests:
             keyboard.add(types.InlineKeyboardButton(text=req.get("movie_title"), callback_data=f'view_details_{req["movie_title"]}'))
+        keyboard.add(types.InlineKeyboardButton("Back to Admin Menu", callback_data="back_to_admin_menu"))
         bot.edit_message_text("Completed Requests:",
                                 chat_id=call.message.chat.id,
                                 message_id=call.message.message_id,
