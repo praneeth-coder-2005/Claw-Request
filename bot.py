@@ -181,7 +181,8 @@ def callback_handler(call):
               if req.get("tmdb_id") != "None":
                     tmdb_details = fetch_tmdb_data_by_id(req.get("tmdb_id"))
                     if tmdb_details:
-                         tmdb_details_text = f"\n\nTitle: {tmdb_details['title']}\nRelease Date:{tmdb_details['release_date']}\nPoster:{f'https://image.tmdb.org/t/p/w500{tmdb_details["poster_path"]}' if tmdb_details.get("poster_path") else 'No Poster'}"
+                         poster_url = f'https://image.tmdb.org/t/p/w500{tmdb_details["poster_path"]}' if tmdb_details.get("poster_path") else 'No Poster'
+                         tmdb_details_text = f"\n\nTitle: {tmdb_details['title']}\nRelease Date:{tmdb_details['release_date']}\nPoster: {poster_url}"
 
               bot.edit_message_text(text=f"Movie:{req['movie_title']}\nUser: {req['telegram_user_id']}\nDate: {req['request_timestamp']}\nStatus: {'Available' if req['available'] else 'Pending'}{tmdb_details_text}",
                                    chat_id=call.message.chat.id,
