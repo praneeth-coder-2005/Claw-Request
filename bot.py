@@ -132,6 +132,9 @@ def request_handler(message):
       bot.reply_to(message,"Please provide a movie title")
       return
 
+    if not movie_title.strip():
+        bot.reply_to(message, "Please provide a movie title after the /request command. For example: `/request Avengers Endgame`")
+        return
     existing_request = get_request(user_id, movie_title)
     if existing_request:
       if existing_request.get("available"):
@@ -311,7 +314,7 @@ def handle_link(message, movie_title,chat_id):
     request = get_request(user_id=None,movie_title=movie_title)
     if request:
         bot.send_message(chat_id = request.get("telegram_user_id"), text = f"Your movie request for '{movie_title}' has been completed view here {request.get('link')}")
-    show_pending_list(message)
+    show_pending_list(telebot.types.CallbackQuery(id = 1,from_user = message.from_user, data="list_pending", message = message))
 
 def handle_filter(message, filter_type,call):
       if filter_type == "title":
