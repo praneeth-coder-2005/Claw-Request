@@ -326,9 +326,9 @@ def show_pending_list(call):
          keyboard = types.InlineKeyboardMarkup()
          keyboard.add(types.InlineKeyboardButton("View Details", callback_data=f'view_details_{req["movie_title"]}'))
          bot.edit_message_text(text=f"Movie:{req['movie_title']}\nUser: {req['telegram_user_id']}\nDate: {req['request_timestamp']}\nStatus: {'Available' if req.get('available') else 'Pending' if req.get('status') == 'pending' else 'Rejected'}",
-                                 chat_id=call.message.chat.id,
-                                 message_id=call.message.message_id,
-                                 reply_markup=keyboard)
+                             chat_id=call.message.chat.id,
+                             message_id=call.message.message_id,
+                             reply_markup=keyboard)
  bot.answer_callback_query(call.id)
 
 
