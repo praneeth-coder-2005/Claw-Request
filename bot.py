@@ -199,7 +199,8 @@ def admin_handler(message):
       return
 
   keyboard = types.InlineKeyboardMarkup()
-  keyboard.add(types.InlineKeyboardButton("List  Requests", callback_data="list_pending"))
+  keyboard.add(types.InlineKeyboardButton("List Pending Requests", callback_data="list_pending"))
+  keyboard.add(types.InlineKeyboardButton("List Completed Requests", callback_data="list_completed"))
   keyboard.add(types.InlineKeyboardButton("Filter Requests", callback_data="filter_requests"))
   bot.reply_to(message, "Admin Menu", reply_markup=keyboard)
 
@@ -209,6 +210,8 @@ def callback_handler(call):
 
   if data == "list_pending":
     show_pending_list(call)
+  elif data == "list_completed":
+      show_completed_list(call)
   elif data.startswith("mark_complete"):
       movie_title = data.split("_")[2]
       bot.send_message(chat_id=call.message.chat.id, text=f"Provide the link for {movie_title}", reply_to_message_id=call.message.message_id)
@@ -319,9 +322,9 @@ def show_filtered_list(call,reqs):
     bot.answer_callback_query(call.id)
 
 def show_pending_list(call):
-    requests = get_requests()
+    requests = filter_requests({"status":"pending"})
     if not requests:
-        bot.answer_callback_query(call.id, text="No requests yet")
+        bot.answer_callback_query(call.id, text="No pending requests yet")
     else:
         keyboard = types.InlineKeyboardMarkup()
         for req in requests:
@@ -332,6 +335,19 @@ def show_pending_list(call):
                                 reply_markup=keyboard)
     bot.answer_callback_query(call.id)
 
+def show_completed_list(call):
+    requests = filter_requests({"status":"completed"})
+    if not requests:
+        bot.answer_callback_query(call.id, text="No completed requests yet")
+    else:
+        keyboard = types.InlineKeyboardMarkup()
+        for req in requests:
+            keyboard.add(types.InlineKeyboardButton(text=req.get("movie_title"), callback_data=f'view_details_{req["movie_title"]}'))
+        bot.edit_message_text("Completed Requests:",
+                                chat_id=call.message.chat.id,
+                                message_id=call.message.message_id,
+                                reply_markup=keyboard)
+    bot.answer_callback_query(call.id)
 
 def show_request_details(call, movie_title):
     req = db.requests.find_one({"movie_title": movie_title})
