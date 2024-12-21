@@ -1,5 +1,5 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext, MessageHandler, Filters
 import pymongo
 import datetime
 import logging
@@ -10,7 +10,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 # --- MongoDB Setup ---
 client = pymongo.MongoClient(config.MONGODB_URI)
-db = client.get_default_database()  # Or use client["your_db_name"]
+db = client[config.MONGODB_DATABASE_NAME] # Changed to use db name directly
 
 # --- Utility Functions ---
 def is_admin(user_id):
