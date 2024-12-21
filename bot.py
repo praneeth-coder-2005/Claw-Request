@@ -6,7 +6,7 @@ import logging
 import config
 from flask import Flask, Response
 import threading
-
+import requests
 
 # --- Logging Setup ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -26,17 +26,20 @@ def get_requests():
 def get_request(user_id, movie_title):
     return db.requests.find_one({"telegram_user_id": user_id, "movie_title": movie_title})
 
-def create_request(user_id, movie_title, timestamp):
+def create_request(user_id, movie_title, timestamp, tmdb_id):
     return db.requests.insert_one({
         "telegram_user_id": user_id,
         "movie_title": movie_title,
         "request_timestamp": timestamp,
         "status": "pending",
-        "link": None
+        "tmdb_id": tmdb_id,
+        "link": None,
+        "available": False,
     })
 
 def update_request_link(movie_title, link):
-    return db.requests.update_one({"movie_title": movie_title}, {"$set": {"link": link, "status": "completed"}})
+    return db.requests.update_one({"movie_title": movie_title}, {"$set": {"link": link, "status": "completed", "available": True}})
+
 
 def filter_requests(filter):
     return db.requests.find(filter).sort("request_timestamp", pymongo.DESCENDING)
@@ -50,6 +53,27 @@ app = Flask(__name__)
 @app.route('/health')
 def health_check():
     return Response(status=200)
+
+# --- TMDB API ---
+def fetch_tmdb_data(movie_title):
+    """Fetches movie data from TMDB by title."""
+    base_url = "https://api.themoviedb.org/3/search/movie"
+    params = {
+        "api_key": config.TMDB_API_KEY,
+        "query": movie_title,
+        "language": "en-US", # change this if needed
+    }
+    try:
+        response = requests.get(base_url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        if data.get("results"):
+            return data["results"]
+        else:
+            return None
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error fetching from TMDB: {e}")
+        return None
 
 # --- Command Handlers ---
 @bot.message_handler(commands=['start', 'help'])
@@ -72,9 +96,25 @@ def request_handler(message):
       bot.reply_to(message,"Please provide a movie title")
       return
 
-    keyboard = types.InlineKeyboardMarkup()
-    keyboard.add(types.InlineKeyboardButton("Confirm Request", callback_data=f'confirm_request_{movie_title}'))
-    bot.reply_to(message,f"Request '{movie_title}'. Are you sure?", reply_markup=keyboard)
+    existing_request = get_request(user_id, movie_title)
+    if existing_request:
+      if existing_request.get("available"):
+        bot.reply_to(message, f"You have already requested this movie, you can view it here: {existing_request.get('link')}")
+      else:
+         bot.reply_to(message, "You have already requested this movie, it is currently pending.")
+      return
+
+    tmdb_results = fetch_tmdb_data(movie_title)
+    if tmdb_results:
+      keyboard = types.InlineKeyboardMarkup()
+      for movie in tmdb_results:
+        keyboard.add(types.InlineKeyboardButton(f"{movie['title']} ({movie['release_date'][:4]})", callback_data=f"select_movie_{movie['id']}_{movie_title}"))
+      bot.reply_to(message, f"Multiple movies found for '{movie_title}'. Please select one:", reply_markup=keyboard)
+    else:
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard.add(types.InlineKeyboardButton("Confirm Request", callback_data=f'confirm_request_{movie_title}_None'))
+        bot.reply_to(message,f"Request '{movie_title}'. Are you sure?", reply_markup=keyboard)
+
 
 @bot.message_handler(commands=['status'])
 def status_handler(message):
@@ -95,6 +135,7 @@ def status_handler(message):
         keyboard = types.InlineKeyboardMarkup()
         keyboard.add(types.InlineKeyboardButton("View Link", url=request_data.get("link")))
         bot.reply_to(message, f"Great news! '{movie_title}' is available here: {request_data.get('link')}", reply_markup=keyboard)
+
 
 @bot.message_handler(commands=['admin'])
 def admin_handler(message):
@@ -120,7 +161,13 @@ def callback_handler(call):
           for req in requests:
               keyboard = types.InlineKeyboardMarkup()
               keyboard.add(types.InlineKeyboardButton("Mark Complete", callback_data=f'mark_complete_{req["movie_title"]}'))
-              bot.edit_message_text(text=f"Movie:{req['movie_title']}\nUser: {req['telegram_user_id']}\nDate: {req['request_timestamp']}",
+              tmdb_details_text = ""
+              if req.get("tmdb_id") != "None":
+                  tmdb_details = fetch_tmdb_data(req.get("movie_title"))
+                  if tmdb_details:
+                       tmdb_details_text = f"\n\nTitle: {tmdb_details['title']}\nRelease Date:{tmdb_details['release_date']}"
+
+              bot.edit_message_text(text=f"Movie:{req['movie_title']}\nUser: {req['telegram_user_id']}\nDate: {req['request_timestamp']}\nStatus: {'Available' if req['available'] else 'Pending'}{tmdb_details_text}",
                                    chat_id=call.message.chat.id,
                                    message_id=call.message.message_id,
                                    reply_markup=keyboard)
@@ -178,16 +225,27 @@ def callback_handler(call):
                                    message_id=call.message.message_id,
                                    reply_markup=keyboard)
     bot.answer_callback_query(call.id)
-
-  elif data.startswith("confirm_request"):
-    movie_title = data.split("_")[2]
+  elif data.startswith("select_movie"):
+    movie_id = data.split("_")[2]
+    movie_title = data.split("_")[3]
     user_id = call.from_user.id
     now = datetime.datetime.now()
-    create_request(user_id, movie_title, now)
+    create_request(user_id, movie_title, now, movie_id)
     bot.edit_message_text(f"Got it! We've added '{movie_title}' to the request list.",
-                          chat_id=call.message.chat.id,
-                          message_id=call.message.message_id)
+                            chat_id=call.message.chat.id,
+                            message_id=call.message.message_id)
     bot.answer_callback_query(call.id)
+  elif data.startswith("confirm_request"):
+    movie_title = data.split("_")[2]
+    tmdb_id = data.split("_")[3]
+    user_id = call.from_user.id
+    now = datetime.datetime.now()
+    create_request(user_id, movie_title, now, tmdb_id)
+    bot.edit_message_text(f"Got it! We've added '{movie_title}' to the request list.",
+                            chat_id=call.message.chat.id,
+                            message_id=call.message.message_id)
+    bot.answer_callback_query(call.id)
+
 
 def handle_link(message, movie_title):
     update_request_link(movie_title, message.text)
