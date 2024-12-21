@@ -7,7 +7,9 @@ import config
 from flask import Flask, Response
 import threading
 import requests
-
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+import time
 # --- Logging Setup ---
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
@@ -54,6 +56,21 @@ def health_check():
     return Response(status=200)
 
 # --- TMDB API ---
+
+def create_retry_session():
+    retry_strategy = Retry(
+            total=3, # Number of retries
+            status_forcelist=[429, 500, 502, 503, 504], # Response statuses for which a retry should occur
+            method_whitelist=["GET"], # Method for which retry should occur
+            backoff_factor = 1 # Factor to determine wait time
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session = requests.Session()
+    session.mount("https://", adapter)
+    return session
+
+session = create_retry_session()
+
 def fetch_tmdb_data(movie_title):
     """Fetches movie data from TMDB by title."""
     base_url = "https://api.themoviedb.org/3/search/movie"
@@ -63,7 +80,7 @@ def fetch_tmdb_data(movie_title):
         "language": "en-US",
     }
     try:
-        response = requests.get(base_url, params=params)
+        response = session.get(base_url, params=params)
         response.raise_for_status()
         data = response.json()
         if data.get("results"):
@@ -71,8 +88,8 @@ def fetch_tmdb_data(movie_title):
         else:
             return None
     except requests.exceptions.RequestException as e:
-        logging.error(f"Error fetching from TMDB: {e}")
-        return None
+         logging.error(f"Error fetching from TMDB: {e}")
+         return None
 
 def fetch_tmdb_data_by_id(movie_id):
         """Fetches movie data from TMDB by id"""
@@ -82,12 +99,21 @@ def fetch_tmdb_data_by_id(movie_id):
             "language": "en-US",
         }
         try:
-            response = requests.get(base_url, params=params)
+            response = session.get(base_url, params=params)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-          logging.error(f"Error fetching from TMDB: {e}")
-          return None
+           logging.error(f"Error fetching from TMDB: {e}")
+           return None
+
+def start_polling():
+    while True:
+            try:
+                bot.polling(non_stop=True)
+            except requests.exceptions.ConnectionError as e:
+                 logging.error(f"Connection Error: {e}, will retry in 10 seconds.")
+                 time.sleep(10)
+
 
 
 # --- Command Handlers ---
@@ -220,10 +246,10 @@ def callback_handler(call):
       if not reqs:
         bot.answer_callback_query(call.id, text="No pending requests")
       else:
-        for req in reqs:
-            keyboard = types.InlineKeyboardMarkup()
-            keyboard.add(types.InlineKeyboardButton("Mark Complete", callback_data=f'mark_complete_{req["movie_title"]}'))
-            bot.edit_message_text(text=f"Movie:{req['movie_title']}\nUser: {req['telegram_user_id']}\nDate: {req['request_timestamp']}",
+          for req in reqs:
+              keyboard = types.InlineKeyboardMarkup()
+              keyboard.add(types.InlineKeyboardButton("Mark Complete", callback_data=f'mark_complete_{req["movie_title"]}'))
+              bot.edit_message_text(text=f"Movie:{req['movie_title']}\nUser: {req['telegram_user_id']}\nDate: {req['request_timestamp']}",
                                    chat_id=call.message.chat.id,
                                    message_id=call.message.message_id,
                                    reply_markup=keyboard)
@@ -284,9 +310,9 @@ def handle_filter(message, filter_type):
 
 # --- Main ---
 if __name__ == '__main__':
-    def start_flask_app():
-        app.run(host='0.0.0.0', port=8080)
+  def start_flask_app():
+      app.run(host='0.0.0.0', port=8080)
 
-    flask_thread = threading.Thread(target=start_flask_app)
-    flask_thread.start()
-    bot.polling(non_stop=True)
+  flask_thread = threading.Thread(target=start_flask_app)
+  flask_thread.start()
+  start_polling()
